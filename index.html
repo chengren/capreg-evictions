@@ -57,12 +57,15 @@ button:hover,select:hover{border-color:var(--ink-3)}
 .presets button{font-size:13px;min-height:30px;padding:4px 9px}
 
 /* main grid */
-.main{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,1fr);gap:16px;align-items:start}
+.main{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(300px,1fr);gap:16px;align-items:stretch}
+/* the map height is fixed once from the tallest profile card, so bottoms line up and the map never jumps on selection */
 @media (max-width:900px){.main{grid-template-columns:1fr}}
 .panel{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r)}
-.mapbox{position:relative;min-width:0}
+.mapbox{position:relative;min-width:0;display:flex;flex-direction:column}
+.mapwrap{position:relative;flex:none;height:760px}
+@media (max-width:900px){.mapwrap{height:min(115vw,620px)!important}}
 .maphead{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:center;padding:12px 14px 6px}
-#map{display:block;width:100%;height:auto;touch-action:none}
+#map{position:absolute;inset:0;display:block;width:100%;height:100%;touch-action:none}
 .mapfoot{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:center;padding:6px 14px 12px}
 .zoombtns{position:absolute;right:12px;top:56px;display:grid;gap:4px}
 .zoombtns button{width:34px;height:34px;padding:0;font-size:18px;line-height:1}
@@ -93,22 +96,22 @@ tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .tip .muted{color:var(--ink-3)}
 
 /* profile card */
-.card{padding:16px 16px 18px;display:grid;gap:14px;min-width:0}
+.card{padding:14px 16px 16px;display:grid;gap:11px;min-width:0;align-content:start;font-size:13px}
 .card-head{display:grid;gap:2px}
-.card-head h2{font-size:26px;font-weight:800}
+.card-head h2{font-size:22px;font-weight:800}
 .card-head .sub{color:var(--ink-2);font-size:14px}
 .hero{display:flex;flex-wrap:wrap;gap:12px 28px;padding-bottom:12px;border-bottom:1px solid var(--rule)}
 .stat{display:grid;gap:4px;min-width:0}
-.hero .big{font:800 44px/1 var(--font-display);font-stretch:80%;letter-spacing:-.01em}
+.hero .big{font:800 34px/1 var(--font-display);font-stretch:80%;letter-spacing:-.01em}
 .hero .unit{color:var(--ink-2);font-size:13px;max-width:22ch;line-height:1.3}
 .pill{display:inline-flex;align-items:center;gap:6px;font:700 12px/1 var(--font-display);letter-spacing:.06em;text-transform:uppercase;padding:5px 9px;border-radius:999px;background:var(--rule-2);color:var(--ink)}
 .pill i{width:10px;height:10px;border-radius:2px}
-.kv{display:grid;grid-template-columns:1fr auto;gap:5px 12px;font-size:14px;margin:0}
+.kv{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:13px;line-height:1.45;margin:0}
 .kv dt{color:var(--ink-2)}
 .kv dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
-.sect{display:grid;gap:8px}
+.sect{display:grid;gap:5px}
 .sect h3{font:700 11px/1 var(--font-display);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);padding-top:4px}
-.spark{width:100%;height:80px;display:block}
+.spark{width:100%;height:64px;display:block}
 .race{display:grid;gap:6px}
 .race-row{display:grid;grid-template-columns:72px 1fr 44px;gap:8px;align-items:center;font-size:13px}
 .race-row .track{height:10px;background:var(--rule-2);border-radius:2px;overflow:hidden}
@@ -175,7 +178,7 @@ td.num{font-variant-numeric:tabular-nums}
         <h2 id="mapTitle">Filings by ZIP code</h2>
         <div class="legend" id="legend" role="group" aria-label="Filter by tier"></div>
       </div>
-      <svg id="map" viewBox="0 0 760 640" role="img" aria-labelledby="mapTitle"></svg>
+      <div class="mapwrap" id="mapwrap"><svg id="map" viewBox="0 0 760 640" role="img" aria-labelledby="mapTitle"></svg></div>
       <div class="zoombtns">
         <button type="button" id="zin" aria-label="Zoom in">+</button>
         <button type="button" id="zout" aria-label="Zoom out">−</button>
@@ -307,7 +310,7 @@ if(!hasACS){d3.select("#mRate").attr("disabled",true).attr("title","Needs ACS re
 d3.select("#showZip").on("change",function(){S.showZip=this.checked;drawLabels()});
 
 /* ---------- map ---------- */
-const W=760,H=640, svg=d3.select("#map");
+let W=760,H=640; const svg=d3.select("#map");
 const proj=d3.geoTransverseMercator().rotate([75,0]).fitExtent([[16,16],[W-16,H-16]],cg);
 const path=d3.geoPath(proj);
 const defs=svg.append("defs");
@@ -339,6 +342,30 @@ function drawLabels(){
 }
 const zoom=d3.zoom().scaleExtent([1,14]).translateExtent([[0,0],[W,H]]).on("zoom",e=>{gRoot.attr("transform",e.transform);curK=e.transform.k;drawLabels()});
 svg.call(zoom).on("dblclick.zoom",null);
+/* fit the map to whatever size its panel has (it stretches to match the profile card) */
+let lastWH="";
+function layoutMap(){
+  const r=document.getElementById("mapwrap").getBoundingClientRect();
+  const w=Math.max(280,Math.round(r.width)), h=Math.max(280,Math.round(r.height));
+  if(w+"x"+h===lastWH) return; lastWH=w+"x"+h; W=w; H=h;
+  svg.attr("viewBox",`0 0 ${W} ${H}`);
+  proj.fitExtent([[14,14],[W-14,H-14]],cg);
+  zipPaths.attr("d",path); gCty.selectAll("path").attr("d",path);
+  zoom.extent([[0,0],[W,H]]).translateExtent([[0,0],[W,H]]);
+  svg.call(zoom.transform,d3.zoomIdentity);
+}
+/* size the map once to the tallest card (a covered ZIP with Census data); redo only when the page width changes */
+function sizeMap(){
+  const wrap=document.getElementById("mapwrap");
+  if(!matchMedia("(min-width:901px)").matches){wrap.style.height="";return;}
+  const card=document.getElementById("card"), box=document.querySelector(".mapbox"), keep=S.sel;
+  S.sel=covered.find(z=>ACS[z])||covered[0]; card.style.alignSelf="start"; renderCard();
+  const ch=card.offsetHeight; S.sel=keep; renderCard(); card.style.alignSelf="";
+  const extra=box.offsetHeight-wrap.offsetHeight;
+  wrap.style.height=Math.max(460,ch-extra)+"px";
+}
+let rzT, lastW=0; new ResizeObserver(()=>{clearTimeout(rzT);rzT=setTimeout(layoutMap,60)}).observe(document.getElementById("mapwrap"));
+addEventListener("resize",()=>{if(innerWidth!==lastW){lastW=innerWidth;sizeMap();}});
 function zoomTo(features,pad=40){
   const fc={type:"FeatureCollection",features};
   const [[x0,y0],[x1,y1]]=path.bounds(fc);
@@ -393,7 +420,7 @@ function paint(){
 }
 
 /* ---------- profile card ---------- */
-function sparkSVG(series,i0,i1,w=320,h=80){
+function sparkSVG(series,i0,i1,w=320,h=64){
   const data=series.slice(i0,i1+1); const mx=d3.max(data)||1;
   const x=d3.scaleBand().domain(d3.range(data.length)).range([0,w]).padding(data.length>30?0.15:0.25);
   const y=d3.scaleLinear().domain([0,mx]).range([h-14,16]);
@@ -529,7 +556,8 @@ function update(fromSelect){
 }
 d3.select("#sourceNote").text(`Court data run ${ev.run_date}; ${fmtInt(ev.n_cases)} residential cases filed ${monthLabel(months[0])} to ${monthLabel(months[M-1])}. Months before January 2022 fall under New York's eviction moratorium and are partial.${hasACS?` Census: ACS ${acsYear} 5-year estimates.`:" Census profile not yet loaded."}`);
 if(!hasACS) d3.select("#lede").text("Eviction cases filed in the region's city courts, by ZIP code. Select a ZIP on the map or in the table to see its filing history. Rates per renter household appear once Census data is added.");
-drawLabels(); update();
+drawLabels(); update(); lastW=innerWidth; sizeMap(); layoutMap();
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{sizeMap();});
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change",update);
 new MutationObserver(update).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
 })();
