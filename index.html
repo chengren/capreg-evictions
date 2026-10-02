@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>
+<title>Capital Region Eviction Map</title>
+<meta name="description" content="Eviction filings by ZIP code in Albany, Rensselaer, Saratoga and Schenectady counties, New York.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
+<style>
+/* Layout: masthead + one control row, then map (left) beside a ZIP profile card (right); trend and ranked table below. */
+:root{
+  --bg:#f6f7f8; --surface:#ffffff; --ink:#14181d; --ink-2:#4a525c; --ink-3:#6f7782;
+  --rule:#dde1e6; --rule-2:#eceff2; --accent:#1d4f6e; --accent-soft:#e3edf3;
+  --nodata:#e4e7eb; --nodata-hatch:#c9ced5; --county:#2b3138;
+  --t1:#eb9a62; --t2:#d9683a; --t3:#b53f24; --t4:#7a2214;
+  --bar:#b53f24; --bar-muted:#d6dbe0; --sel:#14181d;
+  --font-display:"Archivo","Arial Narrow",system-ui,sans-serif;
+  --font-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121417; --surface:#1a1d21; --ink:#f1f3f5; --ink-2:#bcc3cb; --ink-3:#939ba5;
+  --rule:#2d3238; --rule-2:#24282d; --accent:#8cc0de; --accent-soft:#1f2d37;
+  --nodata:#262a2f; --nodata-hatch:#353a41; --county:#d7dce1;
+  --t1:#a23d22; --t2:#cf5a30; --t3:#ec8a50; --t4:#f6c08f;
+  --bar:#ec8a50; --bar-muted:#3a4047; --sel:#ffffff; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121417; --surface:#1a1d21; --ink:#f1f3f5; --ink-2:#bcc3cb; --ink-3:#939ba5;
+  --rule:#2d3238; --rule-2:#24282d; --accent:#8cc0de; --accent-soft:#1f2d37;
+  --nodata:#262a2f; --nodata-hatch:#353a41; --county:#d7dce1;
+  --t1:#a23d22; --t2:#cf5a30; --t3:#ec8a50; --t4:#f6c08f;
+  --bar:#ec8a50; --bar-muted:#3a4047; --sel:#ffffff; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--font-body);margin:0}
+.wrap{max-width:1280px;margin:0 auto;padding-inline:20px;padding-block:24px 48px}
+h1,h2,h3{font-family:var(--font-display);font-stretch:85%;text-wrap:balance;margin:0}
+h1{font-size:clamp(26px,3.4vw,38px);font-weight:800;letter-spacing:-.01em;line-height:1.08}
+h2{font-size:19px;font-weight:700}
+.eyebrow{font:600 12px/1 var(--font-display);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+.lede{color:var(--ink-2);max-width:68ch;margin:.6rem 0 0}
+.num{font-variant-numeric:tabular-nums}
+header{display:grid;gap:6px;margin-bottom:18px}
+
+/* controls */
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:end;padding:12px 0;border-block:1px solid var(--rule);margin-bottom:16px}
+.ctl{display:grid;gap:4px}
+.ctl label,.ctl .lab{font:600 11px/1 var(--font-display);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+select,button{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:6px 10px;min-height:34px}
+button{cursor:pointer}
+button:hover,select:hover{border-color:var(--ink-3)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+.seg button{border:0;border-radius:0;min-height:32px}
+.seg button+button{border-left:1px solid var(--rule)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--surface)}
+.seg button:disabled{color:var(--ink-3);cursor:not-allowed;background:var(--rule-2)}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.presets button{font-size:13px;min-height:30px;padding:4px 9px}
+
+/* main grid */
+.main{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.main{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r)}
+.mapbox{position:relative;min-width:0}
+.maphead{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:center;padding:12px 14px 6px}
+#map{display:block;width:100%;height:auto;touch-action:none}
+.mapfoot{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:center;padding:6px 14px 12px}
+.zoombtns{position:absolute;right:12px;top:56px;display:grid;gap:4px}
+.zoombtns button{width:34px;height:34px;padding:0;font-size:18px;line-height:1}
+.legend{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:4px 9px 4px 6px;border-radius:999px;border:1px solid var(--rule);background:var(--surface)}
+.chip i{width:14px;height:14px;border-radius:3px;display:inline-block;border:1px solid rgba(0,0,0,.08)}
+.chip[aria-pressed="false"]{opacity:.42}
+.chip .rng{color:var(--ink-3);font-size:12px}
+.nodata-sw{background:repeating-linear-gradient(45deg,var(--nodata) 0 3px,var(--nodata-hatch) 3px 5px)}
+.toggle{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2)}
+.zip{stroke:var(--surface);stroke-width:.7;vector-effect:non-scaling-stroke;cursor:pointer}
+.zip.nod{cursor:pointer}
+.zip:hover{stroke:var(--sel);stroke-width:1.6}
+.zip.sel{stroke:var(--sel);stroke-width:2.6}
+.zip.dim{opacity:.18}
+/* SVG paths get a rectangular browser focus box on click; use the stroke instead */
+.zip:focus{outline:none}
+.zip:focus-visible{outline:none;stroke:var(--accent);stroke-width:2.6}
+#map:focus{outline:none}
+tbody tr:focus{outline:none}
+tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.cty{fill:none;stroke:var(--county);stroke-width:1.4;vector-effect:non-scaling-stroke;pointer-events:none;stroke-linejoin:round}
+.lbl{font:600 11px var(--font-display);fill:var(--ink);paint-order:stroke;stroke:var(--surface);stroke-width:3px;pointer-events:none}
+.lbl.city{font-size:13px;font-weight:800;letter-spacing:.02em}
+.lbl.cty-name{font-size:12px;fill:var(--ink-3);letter-spacing:.14em;text-transform:uppercase}
+.tip{position:fixed;pointer-events:none;z-index:9;background:var(--surface);color:var(--ink);border:1px solid var(--rule);border-radius:var(--r);padding:8px 10px;font-size:13px;line-height:1.35;box-shadow:0 4px 16px rgba(0,0,0,.12);max-width:240px}
+.tip b{font-family:var(--font-display);font-size:15px}
+.tip .muted{color:var(--ink-3)}
+
+/* profile card */
+.card{padding:16px 16px 18px;display:grid;gap:14px;min-width:0}
+.card-head{display:grid;gap:2px}
+.card-head h2{font-size:26px;font-weight:800}
+.card-head .sub{color:var(--ink-2);font-size:14px}
+.hero{display:flex;flex-wrap:wrap;gap:12px 28px;padding-bottom:12px;border-bottom:1px solid var(--rule)}
+.stat{display:grid;gap:4px;min-width:0}
+.hero .big{font:800 44px/1 var(--font-display);font-stretch:80%;letter-spacing:-.01em}
+.hero .unit{color:var(--ink-2);font-size:13px;max-width:22ch;line-height:1.3}
+.pill{display:inline-flex;align-items:center;gap:6px;font:700 12px/1 var(--font-display);letter-spacing:.06em;text-transform:uppercase;padding:5px 9px;border-radius:999px;background:var(--rule-2);color:var(--ink)}
+.pill i{width:10px;height:10px;border-radius:2px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:5px 12px;font-size:14px;margin:0}
+.kv dt{color:var(--ink-2)}
+.kv dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+.sect{display:grid;gap:8px}
+.sect h3{font:700 11px/1 var(--font-display);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);padding-top:4px}
+.spark{width:100%;height:80px;display:block}
+.race{display:grid;gap:6px}
+.race-row{display:grid;grid-template-columns:72px 1fr 44px;gap:8px;align-items:center;font-size:13px}
+.race-row .track{height:10px;background:var(--rule-2);border-radius:2px;overflow:hidden}
+.race-row .fill{height:100%;background:var(--accent);border-radius:0 2px 2px 0}
+.race-row .v{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+.note{font-size:12.5px;color:var(--ink-3);line-height:1.45}
+.notice{font-size:13px;background:var(--accent-soft);color:var(--ink);border-radius:var(--r);padding:9px 11px;line-height:1.45}
+.notice code{font-size:12px}
+.linkbtn{background:none;border:0;padding:0;min-height:0;color:var(--accent);text-decoration:underline;font-size:13px}
+
+/* lower */
+.lower{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-top:16px}
+.lower>*{min-width:0}
+.trend{padding:14px 14px 8px;min-width:0}
+.trend-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;align-items:baseline}
+#trend{display:block;width:100%;height:auto}
+.axis text{fill:var(--ink-3);font:12px var(--font-body)}
+.axis line,.axis path{stroke:var(--rule)}
+.grid line{stroke:var(--rule-2)}
+.brush .selection{fill:var(--accent);fill-opacity:.10;stroke:var(--accent);stroke-width:1}
+.brush .handle{fill:var(--accent);fill-opacity:.6}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:640px}
+th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--rule-2);white-space:nowrap}
+th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+th{font:700 11px/1.2 var(--font-display);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);cursor:pointer;user-select:none}
+th[aria-sort] .arr::after{content:" ↓"}
+th[aria-sort="ascending"] .arr::after{content:" ↑"}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--rule-2)}
+tbody tr.sel{background:var(--accent-soft)}
+td.num{font-variant-numeric:tabular-nums}
+.tier-dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.about{padding:16px;display:grid;gap:10px;font-size:14px;color:var(--ink-2)}
+.about p{margin:0;max-width:80ch}
+.about h2{color:var(--ink)}
+.err{padding:24px;color:var(--ink)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Albany · Rensselaer · Saratoga · Schenectady counties, NY</span>
+    <h1>Capital Region Eviction Map</h1>
+    <p class="lede" id="lede">Eviction cases filed in the region's city courts, by ZIP code. Select a ZIP on the map or in the table to see its filing history and renter profile.</p>
+  </header>
+
+  <div class="controls" role="group" aria-label="Map controls">
+    <div class="ctl">
+      <span class="lab">Measure</span>
+      <div class="seg" id="metricSeg">
+        <button type="button" data-m="rate" id="mRate">Per 1,000 renter households</button>
+        <button type="button" data-m="count" id="mCount">Number of filings</button>
+      </div>
+    </div>
+    <div class="ctl"><label for="startSel">From</label><select id="startSel"></select></div>
+    <div class="ctl"><label for="endSel">To</label><select id="endSel"></select></div>
+    <div class="ctl"><span class="lab">Quick ranges</span><div class="presets" id="presets"></div></div>
+  </div>
+
+  <div class="main">
+    <section class="panel mapbox" aria-label="Map of eviction filings by ZIP code">
+      <div class="maphead">
+        <h2 id="mapTitle">Filings by ZIP code</h2>
+        <div class="legend" id="legend" role="group" aria-label="Filter by tier"></div>
+      </div>
+      <svg id="map" viewBox="0 0 760 640" role="img" aria-labelledby="mapTitle"></svg>
+      <div class="zoombtns">
+        <button type="button" id="zin" aria-label="Zoom in">+</button>
+        <button type="button" id="zout" aria-label="Zoom out">−</button>
+        <button type="button" id="zcity" aria-label="Zoom to the cities" title="Zoom to the cities" style="font-size:12px">City</button>
+        <button type="button" id="zall" aria-label="Show all three counties" title="Show all three counties" style="font-size:12px">All</button>
+      </div>
+      <div class="mapfoot">
+        <span class="toggle"><input type="checkbox" id="showZip"><label for="showZip">Show ZIP labels</label></span>
+        <span class="note" id="mapNote"></span>
+      </div>
+    </section>
+
+    <aside class="panel card" id="card" aria-live="polite"></aside>
+  </div>
+
+  <div class="lower">
+    <section class="panel trend" aria-label="Monthly filings">
+      <div class="trend-head">
+        <h2 id="trendTitle">Monthly filings, region</h2>
+        <span class="note">Drag across the chart to set the date range.</span>
+      </div>
+      <svg id="trend" viewBox="0 0 1200 220" role="img" aria-labelledby="trendTitle"></svg>
+    </section>
+
+    <section class="panel" aria-label="ZIP code table">
+      <div class="maphead"><h2>ZIP codes with city-court coverage</h2><span class="note" id="tableNote"></span></div>
+      <div class="tablewrap"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+    </section>
+
+    <section class="panel about">
+      <h2>About the data</h2>
+      <p><b>Eviction filings</b> come from the NY State Unified Court System's deidentified landlord-tenant extract for city and district courts. It covers seven city courts: Albany, Cohoes and Watervliet (Albany County), Troy and Rensselaer (Rensselaer County), Mechanicville (Saratoga County), and Schenectady. Saratoga Springs City Court is not in the current extract, so in Saratoga County only the Mechanicville ZIP code has data. Town and village courts are not in the extract, so suburban and rural ZIP codes appear as <i>no data</i>, not as places without evictions. ZIP codes that straddle a city line are partly undercounted for the same reason. Commercial cases are excluded. A filing is counted in the month it was filed and in the ZIP of the property address.</p>
+      <p><b>Rates</b> are annualized: filings in the selected window, divided by the number of months, times 12, per 1,000 renter households. Tiers split ZIP codes with coverage into quartiles of the 2022 to latest-month rate, so the same color means the same rate whichever window you select.</p>
+      <p><b>Renter profile</b> figures are from the American Community Survey 5-year estimates for ZIP Code Tabulation Areas. Income needed to afford rent is median gross rent × 12 ÷ 0.30. Rent-burden shares exclude households for which the ratio is not computed. Race and ethnicity describe the householder of renter-occupied units; Hispanic householders may be of any race, and "White" means White alone, not Hispanic.</p>
+      <p class="note" id="sourceNote"></p>
+    </section>
+  </div>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+(async function(){
+"use strict";
+const PLACES = {"12202":"Albany","12203":"Albany","12204":"Albany / Menands","12206":"Albany","12207":"Albany","12208":"Albany","12209":"Albany","12210":"Albany","12205":"Colonie","12211":"Loudonville","12180":"Troy","12182":"Troy (Lansingburgh)","12144":"Rensselaer","12047":"Cohoes","12189":"Watervliet","12303":"Schenectady / Rotterdam","12304":"Schenectady","12305":"Schenectady","12306":"Schenectady / Rotterdam","12307":"Schenectady","12308":"Schenectady","12309":"Niskayuna / Schenectady","12118":"Mechanicville","12866":"Saratoga Springs","12020":"Ballston Spa","12065":"Clifton Park"};
+const CITIES = [["Albany",-73.7562,42.6526,"start",8,4],["Troy",-73.6918,42.7284,"start",8,4],["Schenectady",-73.9396,42.8142,"middle",0,-10],["Cohoes",-73.7001,42.7742,"end",-8,-4],["Watervliet",-73.7012,42.7301,"end",-8,4],["Rensselaer",-73.7357,42.6426,"start",8,14],["Mechanicville",-73.6868,42.9029,"start",8,4],["Saratoga Springs",-73.7846,43.0831,"middle",0,-10]];
+const TIER_NAMES=["Lower","Moderate","High","Extreme"];
+const fmtInt=d3.format(","), fmtPct=v=>isFinite(v)?(v*100).toFixed(1)+"%":"—";
+const money=v=>isFinite(v)?"$"+fmtInt(Math.round(v)):"—";
+const intOr=v=>isFinite(v)?fmtInt(Math.round(v)):"—";
+const monthLabel=m=>{const [y,mo]=m.split("-");return new Date(+y,+mo-1,1).toLocaleString("en-US",{month:"short",year:"numeric"})};
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+/* ---------- load ---------- */
+let ev,zg,cg,acsRows=null;
+try{
+  [ev,zg,cg]=await Promise.all([d3.json("data/eviction_zip_month.json"),d3.json("data/zcta_geo.geojson"),d3.json("data/county_geo.geojson")]);
+}catch(e){
+  document.querySelector(".main").innerHTML='<div class="panel err"><h2>The map data did not load.</h2><p>This page reads files from its <code>data/</code> folder. Open it through a web server (for example <code>python -m http.server</code> in the dashboard folder) instead of double-clicking the HTML file.</p></div>';
+  return;
+}
+try{ acsRows=await d3.csv("data/acs_zcta.csv"); if(!acsRows.length) acsRows=null; }catch(e){ acsRows=null; }
+
+/* d3 wants clockwise outer rings; GeoJSON writers often use counter-clockwise. */
+function rewind(fc){
+  fc.features.forEach(f=>{
+    if(d3.geoArea(f)>2*Math.PI){
+      const g=f.geometry;
+      if(g.type==="Polygon") g.coordinates.forEach(r=>r.reverse());
+      else if(g.type==="MultiPolygon") g.coordinates.forEach(p=>p.forEach(r=>r.reverse()));
+    }
+  });
+  return fc;
+}
+rewind(zg); rewind(cg);
+
+const num=v=>(v===undefined||v===""||v==="NA")?NaN:+v;
+const ACS={};
+if(acsRows) acsRows.forEach(r=>{const z=String(r.zcta).padStart(5,"0");const o={};for(const k in r)o[k]=k==="zcta"||k==="county"||k==="acs_year"?r[k]:num(r[k]);ACS[z]=o;});
+const hasACS=acsRows!==null;
+const acsYear=hasACS?(acsRows[0].acs_year||""):"";
+
+const months=ev.months, M=months.length;
+const EV=ev.zips;
+const zipCounty={}; zg.features.forEach(f=>{const z=f.properties.zcta;zipCounty[z]=f.properties.county||(ACS[z]&&ACS[z].county)||"";});
+const covered=Object.keys(EV).filter(z=>EV[z].covered&&zipCounty[z]);
+
+/* ---------- state ---------- */
+const firstFull=Math.max(0,months.indexOf("2022-01"));
+const S={metric:hasACS?"rate":"count",i0:firstFull,i1:M-1,sel:null,tiersOn:[true,true,true,true],showZip:false,sortKey:"value",sortDir:-1};
+
+const sumRange=(arr,i0,i1)=>{let s=0;for(let i=i0;i<=i1;i++)s+=arr[i];return s};
+function zipValue(z,i0=S.i0,i1=S.i1,metric=S.metric){
+  const e=EV[z]; if(!e||!e.covered) return NaN;
+  const n=sumRange(e.filings,i0,i1), mo=i1-i0+1, ann=n/mo*12;
+  if(metric==="count") return n;
+  const rh=ACS[z]&&ACS[z].renter_hh;
+  return rh>0?ann/rh*1000:NaN;
+}
+/* fixed tier breaks: quartiles over the full window (annualized for comparability across windows) */
+function breaksFor(metric){
+  const vals=covered.map(z=>{
+    const v=zipValue(z,firstFull,M-1,metric);
+    return metric==="count"?v/(M-firstFull)*12:v;
+  }).filter(isFinite).sort(d3.ascending);
+  return [0.25,0.5,0.75].map(p=>d3.quantileSorted(vals,p));
+}
+const BREAKS={count:breaksFor("count"),rate:hasACS?breaksFor("rate"):null};
+function tierOf(z){
+  let v=zipValue(z); if(!isFinite(v)) return -1;
+  if(S.metric==="count") v=v/(S.i1-S.i0+1)*12;   /* compare annualized counts to the breaks */
+  const b=BREAKS[S.metric]; return v<b[0]?0:v<b[1]?1:v<b[2]?2:3;
+}
+const tierColor=t=>t<0?null:css("--t"+(t+1));
+
+/* ---------- controls ---------- */
+const startSel=d3.select("#startSel"), endSel=d3.select("#endSel");
+months.forEach((m,i)=>{startSel.append("option").attr("value",i).text(monthLabel(m));endSel.append("option").attr("value",i).text(monthLabel(m));});
+startSel.on("change",function(){S.i0=Math.min(+this.value,S.i1);update(true)});
+endSel.on("change",function(){S.i1=Math.max(+this.value,S.i0);update(true)});
+const lastYear=+months[M-1].slice(0,4);
+const presets=[["Last 12 months",Math.max(0,M-12),M-1]];
+for(let y=lastYear-1;y>=2022;y--){const a=months.indexOf(y+"-01"),b=months.indexOf(y+"-12");if(a>=0&&b>=0)presets.push([String(y),a,b]);}
+presets.push(["Jan 2022 to latest",firstFull,M-1]);
+d3.select("#presets").selectAll("button").data(presets).join("button").attr("type","button").text(d=>d[0]).on("click",(e,d)=>{S.i0=d[1];S.i1=d[2];update(true)});
+
+d3.selectAll("#metricSeg button").on("click",function(){S.metric=this.dataset.m;S.tiersOn=[true,true,true,true];update()});
+if(!hasACS){d3.select("#mRate").attr("disabled",true).attr("title","Needs ACS renter-household counts (data/acs_zcta.csv)");}
+d3.select("#showZip").on("change",function(){S.showZip=this.checked;drawLabels()});
+
+/* ---------- map ---------- */
+const W=760,H=640, svg=d3.select("#map");
+const proj=d3.geoTransverseMercator().rotate([75,0]).fitExtent([[16,16],[W-16,H-16]],cg);
+const path=d3.geoPath(proj);
+const defs=svg.append("defs");
+const pat=defs.append("pattern").attr("id","hatch").attr("patternUnits","userSpaceOnUse").attr("width",6).attr("height",6).attr("patternTransform","rotate(45)");
+pat.append("rect").attr("width",6).attr("height",6).attr("class","hb");
+pat.append("rect").attr("width",2).attr("height",6).attr("class","hl");
+const gRoot=svg.append("g"), gZip=gRoot.append("g"), gCty=gRoot.append("g"), gLbl=gRoot.append("g");
+const zipPaths=gZip.selectAll("path").data(zg.features,d=>d.properties.zcta).join("path").attr("class","zip").attr("d",path)
+  .attr("tabindex",0).attr("role","button")
+  .attr("aria-label",d=>"ZIP "+d.properties.zcta)
+  .on("mousemove",(e,d)=>showTip(e,d.properties.zcta)).on("mouseleave",hideTip)
+  .on("click",(e,d)=>select(d.properties.zcta))
+  .on("keydown",(e,d)=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();select(d.properties.zcta)}});
+gCty.selectAll("path").data(cg.features).join("path").attr("class","cty").attr("d",path);
+
+let curK=1;
+function drawLabels(){
+  const k=curK;
+  const lab=[];
+  const CO_OFF={Schenectady:[-34,-30],Albany:[-40,30],Rensselaer:[40,30],Saratoga:[-30,-30]};
+  cg.features.forEach(f=>{const c=path.centroid(f),o=CO_OFF[f.properties.county]||[0,0];lab.push({x:c[0],y:c[1],t:f.properties.county+" Co.",cls:"lbl cty-name",a:"middle",dx:o[0],dy:o[1]});});
+  CITIES.forEach(([n,lon,lat,a,dx,dy])=>{const p=proj([lon,lat]);lab.push({x:p[0],y:p[1],t:n,cls:"lbl city",a,dx,dy,dot:true});});
+  if(S.showZip) zg.features.forEach(f=>{const c=path.centroid(f);if(isFinite(c[0]))lab.push({x:c[0],y:c[1],t:f.properties.zcta,cls:"lbl",a:"middle",dx:0,dy:4});});
+  /* county names only at region zoom, ZIP labels scale down with zoom */
+  const sel=gLbl.selectAll("g.l").data(lab.filter(d=>!(d.cls.includes("cty-name")&&k>2.2)),d=>d.t).join(en=>{const g=en.append("g").attr("class","l");g.append("circle").attr("r",2.5);g.append("text");return g});
+  sel.attr("transform",d=>`translate(${d.x},${d.y}) scale(${1/k})`);
+  sel.select("circle").attr("display",d=>d.dot?null:"none").attr("fill",css("--ink"));
+  sel.select("text").attr("class",d=>d.cls).attr("text-anchor",d=>d.a).attr("x",d=>d.dx).attr("y",d=>d.dy).text(d=>d.t);
+}
+const zoom=d3.zoom().scaleExtent([1,14]).translateExtent([[0,0],[W,H]]).on("zoom",e=>{gRoot.attr("transform",e.transform);curK=e.transform.k;drawLabels()});
+svg.call(zoom).on("dblclick.zoom",null);
+function zoomTo(features,pad=40){
+  const fc={type:"FeatureCollection",features};
+  const [[x0,y0],[x1,y1]]=path.bounds(fc);
+  const k=Math.min(14,0.9/Math.max((x1-x0)/W,(y1-y0)/H));
+  svg.transition().duration(600).call(zoom.transform,d3.zoomIdentity.translate(W/2,H/2).scale(k).translate(-(x0+x1)/2,-(y0+y1)/2));
+}
+const coveredFeatures=zg.features.filter(f=>covered.includes(f.properties.zcta)&&!["12309","12303","12306","12182"].includes(f.properties.zcta));
+d3.select("#zin").on("click",()=>svg.transition().call(zoom.scaleBy,1.6));
+d3.select("#zout").on("click",()=>svg.transition().call(zoom.scaleBy,1/1.6));
+d3.select("#zall").on("click",()=>svg.transition().duration(600).call(zoom.transform,d3.zoomIdentity));
+d3.select("#zcity").on("click",()=>zoomTo(coveredFeatures));
+
+/* ---------- tooltip ---------- */
+const tip=document.getElementById("tip");
+function showTip(e,z){
+  const v=zipValue(z), e2=EV[z];
+  let h=`<b>${z}</b> <span class="muted">${PLACES[z]||(zipCounty[z]+" County")}</span><br>`;
+  if(e2&&e2.covered){
+    const n=sumRange(e2.filings,S.i0,S.i1);
+    h+= S.metric==="rate"&&isFinite(v)?`${v.toFixed(1)} filings per 1,000 renter households a year<br><span class="muted">${fmtInt(n)} filings</span>`:`${fmtInt(n)} filings`;
+  }else{
+    h+=`<span class="muted">No data: served mainly by town or village courts, which are not in the court extract.</span>`;
+  }
+  tip.innerHTML=h; tip.hidden=false;
+  const r=tip.getBoundingClientRect(); let x=e.clientX+14,y=e.clientY+14;
+  if(x+r.width>innerWidth-8)x=e.clientX-r.width-14; if(y+r.height>innerHeight-8)y=e.clientY-r.height-14;
+  tip.style.left=x+"px"; tip.style.top=y+"px";
+}
+function hideTip(){tip.hidden=true}
+
+/* ---------- legend ---------- */
+function drawLegend(){
+  const b=BREAKS[S.metric], f=S.metric==="rate"?(v=>v.toFixed(0)):(v=>fmtInt(Math.round(v)));
+  const ranges=[`< ${f(b[0])}`,`${f(b[0])}–${f(b[1])}`,`${f(b[1])}–${f(b[2])}`,`${f(b[2])}+`];
+  const items=TIER_NAMES.map((n,i)=>({n,i,r:ranges[i]}));
+  const sel=d3.select("#legend").selectAll("button.chip").data(items).join("button").attr("type","button").attr("class","chip")
+    .attr("aria-pressed",d=>S.tiersOn[d.i]).attr("title","Show or hide this tier")
+    .on("click",(e,d)=>{S.tiersOn[d.i]=!S.tiersOn[d.i];if(!S.tiersOn.some(Boolean))S.tiersOn=[true,true,true,true];paint();drawLegend()});
+  sel.html(d=>`<i style="background:${tierColor(d.i)}"></i>${d.n} <span class="rng num">${d.r}</span>`);
+  d3.select("#legend").selectAll("span.chip").data([0]).join("span").attr("class","chip").html('<i class="nodata-sw"></i>No data');
+}
+
+/* ---------- paint map ---------- */
+function paint(){
+  pat.select(".hb").attr("fill",css("--nodata")); pat.select(".hl").attr("fill",css("--nodata-hatch"));
+  zipPaths.each(function(d){
+    const z=d.properties.zcta, t=tierOf(z);
+    d3.select(this).classed("nod",t<0).attr("fill",t<0?"url(#hatch)":tierColor(t))
+      .classed("dim",t>=0&&!S.tiersOn[t]).classed("sel",S.sel===z);
+  });
+  zipPaths.filter(d=>d.properties.zcta===S.sel).raise();
+}
+
+/* ---------- profile card ---------- */
+function sparkSVG(series,i0,i1,w=320,h=80){
+  const data=series.slice(i0,i1+1); const mx=d3.max(data)||1;
+  const x=d3.scaleBand().domain(d3.range(data.length)).range([0,w]).padding(data.length>30?0.15:0.25);
+  const y=d3.scaleLinear().domain([0,mx]).range([h-14,16]);
+  let s=`<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">`;
+  s+=`<line x1="0" x2="${w}" y1="${h-14}" y2="${h-14}" stroke="${css("--rule")}"/>`;
+  data.forEach((v,i)=>{const bh=Math.max(v>0?1.5:0,(h-14)-y(v));s+=`<rect x="${x(i)}" y="${(h-14)-bh}" width="${x.bandwidth()}" height="${bh}" fill="${css("--bar")}" rx="1"><title>${monthLabel(months[i0+i])}: ${v}</title></rect>`;});
+  s+=`<text x="0" y="${h-2}" font-size="10" fill="${css("--ink-3")}">${monthLabel(months[i0])}</text><text x="${w}" y="${h-2}" font-size="10" text-anchor="end" fill="${css("--ink-3")}">${monthLabel(months[i1])}</text>`;
+  s+=`<text x="${w}" y="10" font-size="10" text-anchor="end" fill="${css("--ink-3")}">peak ${mx}/mo</text></svg>`;
+  return s;
+}
+function outcomes(sumOf){
+  const n=sumOf("filings"), p=k=>n?sumOf(k)/n:NaN;
+  return `<div class="sect"><h3>Case outcomes in this window</h3><dl class="kv">
+    <dt>Non-payment cases</dt><dd>${fmtPct(p("nonpayment"))}</dd>
+    <dt>Judgment of possession</dt><dd>${fmtPct(p("judgment_poss"))}</dd>
+    <dt>Warrant of eviction issued</dt><dd>${fmtPct(p("warrant_issued"))}</dd>
+    <dt>Warrant executed</dt><dd>${fmtPct(p("warrant_executed"))}</dd>
+    <dt>Tenant had a lawyer</dt><dd>${fmtPct(p("tenant_counsel"))}</dd>
+    <dt>Landlord had a lawyer</dt><dd>${fmtPct(p("landlord_counsel"))}</dd></dl></div>`;
+}
+function acsBlocks(a){
+  if(!hasACS) return `<div class="notice">Renter profile (households, rent, income, burden, race) appears here once <code>data/acs_zcta.csv</code> is in place. Run <code>01_get_acs_zcta.R</code> to create it.</div>`;
+  if(!a) return `<p class="note">No ACS estimates for this ZIP.</p>`;
+  const race=[["White","renter_white_nh"],["Black","renter_black"],["Asian","renter_asian"],["Hispanic","renter_hispanic"]];
+  return `<div class="sect"><h3>Housing</h3><dl class="kv">
+      <dt>Renter households</dt><dd>${intOr(a.renter_hh)}</dd>
+      <dt>Share of households renting</dt><dd>${fmtPct(a.pct_renter)}</dd>
+      <dt>Median gross rent</dt><dd>${money(a.median_rent)}</dd>
+      <dt>Rental vacancy</dt><dd>${fmtPct(a.rental_vacancy)}</dd></dl></div>
+    <div class="sect"><h3>Income &amp; affordability</h3><dl class="kv">
+      <dt>Median income, all households</dt><dd>${money(a.median_income)}</dd>
+      <dt>Median income, renters</dt><dd>${money(a.median_income_renter)}</dd>
+      <dt>Income needed to afford rent</dt><dd>${money(a.income_needed)}</dd>
+      <dt>Severely rent-burdened (≥50%)</dt><dd>${fmtPct(a.severe_burden)}</dd>
+      <dt>Cost-burdened (≥30%)</dt><dd>${fmtPct(a.cost_burden)}</dd>
+      <dt>Poverty rate</dt><dd>${fmtPct(a.poverty_rate)}</dd>
+      <dt>Unemployment</dt><dd>${fmtPct(a.unemployment)}</dd></dl></div>
+    <div class="sect"><h3>Who rents here</h3><div class="race">${race.map(([l,k])=>`<div class="race-row"><span>${l}</span><span class="track"><span class="fill" style="display:block;width:${isFinite(a[k])?Math.min(100,a[k]*100):0}%"></span></span><span class="v">${isFinite(a[k])?Math.round(a[k]*100)+"%":"—"}</span></div>`).join("")}</div>
+      <p class="note">Share of renter households by race or ethnicity of householder. ACS ${acsYear} 5-year.</p></div>`;
+}
+function renderCard(){
+  const card=document.getElementById("card"), mo=S.i1-S.i0+1;
+  const win=`${monthLabel(months[S.i0])} to ${monthLabel(months[S.i1])}`;
+  const z=S.sel;
+  if(!z){
+    const n=sumRange(ev.region.filings,S.i0,S.i1);
+    const rh=hasACS?d3.sum(covered,c=>ACS[c]?ACS[c].renter_hh:0):0;
+    const cn=d3.sum(covered,c=>sumRange(EV[c].filings,S.i0,S.i1));
+    const rate=rh?cn/mo*12/rh*1000:NaN;
+    card.innerHTML=`<div class="card-head"><span class="eyebrow">Region overview</span><h2>${ev.courts.length} city courts</h2><span class="sub">${win}</span></div>
+      <div class="hero"><div class="stat"><span class="big num">${fmtInt(n)}</span><span class="unit">eviction filings, about ${fmtInt(Math.round(n/mo))} a month</span></div>
+      ${isFinite(rate)?`<div class="stat"><span class="big num">${rate.toFixed(1)}</span><span class="unit">filings a year per 1,000 renter households in covered ZIPs</span></div>`:""}</div>
+      <div class="sect"><h3>Monthly filings</h3>${sparkSVG(ev.region.filings,S.i0,S.i1)}</div>
+      ${outcomes(k=>sumRange(ev.region[k],S.i0,S.i1))}
+      <p class="note">Select a ZIP code on the map or in the table for its filing history and renter profile.</p>`;
+    return;
+  }
+  const e=EV[z], a=ACS[z], place=PLACES[z]||"", cty=zipCounty[z]||(a&&a.county)||"";
+  const head=`<div class="card-head"><span class="eyebrow">ZIP code</span><h2>${z}</h2><span class="sub">${[place,cty&&cty+" County"].filter(Boolean).join(" · ")}</span></div>`;
+  const back=`<button type="button" class="linkbtn" id="backBtn">Back to region overview</button>`;
+  if(!e||!e.covered){
+    const n=e?sumRange(e.filings,S.i0,S.i1):0;
+    card.innerHTML=head+`<div class="notice">Most eviction cases in this ZIP code go to town or village courts, which are not in the state's court extract. ${n?`The city courts recorded ${fmtInt(n)} filing${n===1?"":"s"} here in this window, which is not a full count.`:""}</div>`+acsBlocks(a)+back;
+  }else{
+    const n=sumRange(e.filings,S.i0,S.i1), v=zipValue(z), t=tierOf(z);
+    const ranked=covered.map(c=>[c,zipValue(c)]).filter(d=>isFinite(d[1])).sort((p,q)=>q[1]-p[1]);
+    const rank=ranked.findIndex(d=>d[0]===z)+1;
+    const big=S.metric==="rate"&&isFinite(v)?`<div class="stat"><span class="big num">${v.toFixed(1)}</span><span class="unit">filings a year per 1,000 renter households</span></div><div class="stat"><span class="big num">${fmtInt(n)}</span><span class="unit">filings in this window</span></div>`:`<div class="stat"><span class="big num">${fmtInt(n)}</span><span class="unit">filings in this window, about ${(n/mo).toFixed(1)} a month</span></div>`;
+    card.innerHTML=head+`<div class="hero">${big}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">${t>=0?`<span class="pill"><i style="background:${tierColor(t)}"></i>${TIER_NAMES[t]}</span>`:""}<span class="note">${rank?`Ranks ${rank} of ${ranked.length} covered ZIP codes`:"No rate yet: Census renter count missing for this ZIP"} · ${win}</span></div>
+      <div class="sect"><h3>Monthly filings</h3>${sparkSVG(e.filings,S.i0,S.i1)}</div>
+      ${outcomes(k=>sumRange(e[k],S.i0,S.i1))}
+      ${acsBlocks(a)}${back}`;
+  }
+  document.getElementById("backBtn").onclick=()=>select(null);
+}
+function select(z){S.sel=(z===S.sel)?null:z;paint();renderCard();renderTable();drawTrend()}
+
+/* ---------- trend with brush ---------- */
+const TW=1200,TH=220,tm={l:46,r:12,t:12,b:28};
+const tsvg=d3.select("#trend");
+const tx=d3.scaleBand().domain(d3.range(M)).range([tm.l,TW-tm.r]).padding(0.18);
+const gT=tsvg.append("g"), gAx=tsvg.append("g").attr("class","axis"), gGrid=tsvg.append("g").attr("class","grid"), gBars=tsvg.append("g"), gBrush=tsvg.append("g").attr("class","brush");
+let brushing=false;
+const brush=d3.brushX().extent([[tm.l,tm.t],[TW-tm.r,TH-tm.b]]).on("end",ev2=>{
+  if(!ev2.sourceEvent||!ev2.selection) return;
+  const [a,b]=ev2.selection, step=tx.step();
+  let i0=Math.round((a-tm.l)/step), i1=Math.round((b-tm.l)/step)-1;
+  i0=Math.max(0,Math.min(M-1,i0)); i1=Math.max(i0,Math.min(M-1,i1));
+  S.i0=i0;S.i1=i1;update(false);
+});
+gBrush.call(brush);
+function drawTrend(){
+  const series=S.sel&&EV[S.sel]?EV[S.sel].filings:ev.region.filings;
+  d3.select("#trendTitle").text(S.sel?`Monthly filings, ZIP ${S.sel}`:"Monthly filings, region");
+  const y=d3.scaleLinear().domain([0,d3.max(series)*1.08||1]).nice().range([TH-tm.b,tm.t]);
+  gGrid.selectAll("line").data(y.ticks(4)).join("line").attr("x1",tm.l).attr("x2",TW-tm.r).attr("y1",y).attr("y2",y);
+  gAx.selectAll("*").remove();
+  gAx.append("g").attr("transform",`translate(${tm.l},0)`).call(d3.axisLeft(y).ticks(4).tickSize(0).tickPadding(8)).call(g=>g.select(".domain").remove());
+  gAx.append("g").attr("transform",`translate(0,${TH-tm.b})`).call(d3.axisBottom(tx).tickValues(d3.range(M).filter(i=>months[i].endsWith("-01"))).tickFormat(i=>months[i].slice(0,4)).tickSizeOuter(0));
+  gBars.selectAll("rect").data(series).join("rect").attr("x",(d,i)=>tx(i)).attr("width",tx.bandwidth())
+    .attr("y",d=>y(d)).attr("height",d=>Math.max(0,y(0)-y(d))).attr("rx",1.5)
+    .attr("fill",(d,i)=>i>=S.i0&&i<=S.i1?css("--bar"):css("--bar-muted"))
+    .selectAll("title").data((d,i)=>[`${monthLabel(months[i])}: ${fmtInt(d)} filings`]).join("title").text(d=>d);
+  gBrush.call(brush.move,[tx(S.i0)-tx.step()*tx.paddingInner()/2,tx(S.i1)+tx.bandwidth()+tx.step()*tx.paddingInner()/2]);
+}
+
+/* ---------- table ---------- */
+function renderTable(){
+  const cols=[["zip","ZIP"],["place","Area"],["filings","Filings"],["value",S.metric==="rate"?"Rate / 1,000":"Filings / yr"],["tier","Tier"],["renter_hh","Renter HH"],["median_rent","Median rent"],["cost_burden","Cost-burdened"]];
+  const mo=S.i1-S.i0+1;
+  const rows=covered.map(z=>{const a=ACS[z]||{};const v=zipValue(z);return{zip:z,place:PLACES[z]||zipCounty[z],filings:sumRange(EV[z].filings,S.i0,S.i1),value:S.metric==="rate"?v:v/mo*12,tier:tierOf(z),renter_hh:a.renter_hh,median_rent:a.median_rent,cost_burden:a.cost_burden}});
+  const k=S.sortKey;
+  rows.sort((p,q)=>{const a=p[k],b=q[k];if(typeof a==="string")return S.sortDir*a.localeCompare(b);return S.sortDir*((isFinite(a)?a:-Infinity)-(isFinite(b)?b:-Infinity))});
+  d3.select("#tbl thead").selectAll("tr").data([0]).join("tr").selectAll("th").data(cols).join("th")
+    .attr("scope","col").attr("aria-sort",d=>d[0]===k?(S.sortDir>0?"ascending":"descending"):null)
+    .html(d=>`${d[1]}<span class="arr"></span>`)
+    .on("click",(e,d)=>{if(S.sortKey===d[0])S.sortDir*=-1;else{S.sortKey=d[0];S.sortDir=(d[0]==="zip"||d[0]==="place")?1:-1}renderTable()});
+  const tr=d3.select("#tbl tbody").selectAll("tr").data(rows,d=>d.zip).join("tr").attr("class",d=>d.zip===S.sel?"sel":null).attr("tabindex",0)
+    .on("click",(e,d)=>select(d.zip)).on("keydown",(e,d)=>{if(e.key==="Enter")select(d.zip)});
+  tr.order();
+  tr.html(d=>`<td class="num"><b>${d.zip}</b></td><td>${d.place}</td><td class="num">${fmtInt(d.filings)}</td><td class="num">${isFinite(d.value)?(S.metric==="rate"?d.value.toFixed(1):fmtInt(Math.round(d.value))):"—"}</td><td>${d.tier>=0?`<span class="tier-dot" style="background:${tierColor(d.tier)}"></span>${TIER_NAMES[d.tier]}`:"—"}</td><td class="num">${intOr(d.renter_hh)}</td><td class="num">${money(d.median_rent)}</td><td class="num">${fmtPct(d.cost_burden)}</td>`);
+  d3.select("#tableNote").text(`${monthLabel(months[S.i0])} to ${monthLabel(months[S.i1])} · select a column to sort`);
+}
+
+/* ---------- update ---------- */
+function update(fromSelect){
+  startSel.property("value",S.i0); endSel.property("value",S.i1);
+  d3.selectAll("#metricSeg button").attr("aria-pressed",function(){return this.dataset.m===S.metric});
+  d3.select("#mapTitle").text(S.metric==="rate"?"Annual filings per 1,000 renter households":"Eviction filings by ZIP code");
+  d3.select("#mapNote").text(`${monthLabel(months[S.i0])} to ${monthLabel(months[S.i1])}`);
+  drawLegend(); paint(); renderCard(); renderTable(); drawTrend();
+}
+d3.select("#sourceNote").text(`Court data run ${ev.run_date}; ${fmtInt(ev.n_cases)} residential cases filed ${monthLabel(months[0])} to ${monthLabel(months[M-1])}. Months before January 2022 fall under New York's eviction moratorium and are partial.${hasACS?` Census: ACS ${acsYear} 5-year estimates.`:" Census profile not yet loaded."}`);
+if(!hasACS) d3.select("#lede").text("Eviction cases filed in the region's city courts, by ZIP code. Select a ZIP on the map or in the table to see its filing history. Rates per renter household appear once Census data is added.");
+drawLabels(); update();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",update);
+new MutationObserver(update).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+})();
+</script>
+</body></html>
